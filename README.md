@@ -33,8 +33,8 @@ Most browser automation tools are either:
 
 ```bash
 # 1. Clone and enter directory
-git clone https://github.com/yourusername/oss-browser-use.git
-cd oss-browser-use
+git clone https://github.com/yourusername/local-browser-use.git
+cd local-browser-use
 
 # 2. Setup Python environment
 python -m venv .venv

@@ -39,3 +39,4 @@ ENV/
 
 # Misc
 .DS_Store
+*.json

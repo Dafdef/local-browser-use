@@ -222,8 +222,8 @@ class BrowserController:
                     },
                     xpath: getXPath(el),
                     is_visible: true,
-                    is_clickable: el.tagName === 'BUTTON' || el.tagName === 'A' || el.role === 'button',
-                    is_input: el.tagName === 'INPUT' || el.tagName === 'TEXTAREA'
+                    is_clickable: el.tagName === 'BUTTON' || el.tagName === 'A' || el.role === 'button' || (el.tagName === 'INPUT' && (el.type === 'submit' || el.type === 'button')),
+                    is_input: (el.tagName === 'INPUT' && el.type !== 'submit' && el.type !== 'button' && el.type !== 'reset') || el.tagName === 'TEXTAREA'
                 });
                 
                 if (elements.length >= """ + str(MAX_ELEMENTS) + """) break;
@@ -362,7 +362,9 @@ You can perform these actions:
 
 Always think step-by-step about what you need to do next. Be specific and precise.
 
-Output your response as JSON with these fields:
+IMPORTANT: Output exactly ONE action per response. Do not output multiple actions or JSON objects.
+
+Output your response as a single JSON object with these fields:
 {
     "reasoning": "Your step-by-step thinking about what to do next",
     "action": "navigate|click|type|scroll|extract|wait|done",
@@ -424,14 +426,38 @@ What should I do next? Respond with JSON."""
             if not full_response.strip():
                 raise ValueError("Empty response from Ollama")
             
+            # Clean and parse the complete response
+            clean_response = full_response.strip()
+            
+            # Try to extract JSON from the response if it's wrapped in other text
+            json_start = clean_response.find('{')
+            json_end = clean_response.rfind('}') + 1
+            
+            if json_start != -1 and json_end > json_start:
+                clean_response = clean_response[json_start:json_end]
+            
             # Parse the complete response
-            result = json.loads(full_response)
+            result = json.loads(clean_response)
+            
+            # Normalize action to lowercase if it exists
+            if 'action' in result:
+                result['action'] = result['action'].lower()
             
             action = AgentAction(**result)
             return action
             
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parsing failed: {e}")
+            logger.error(f"Raw response: {repr(full_response[:1000])}")
+            logger.error(f"Cleaned response: {repr(clean_response[:1000])}")
+            # Fallback action
+            return AgentAction(
+                reasoning="JSON parsing error, waiting",
+                action=ActionType.WAIT
+            )
         except Exception as e:
             logger.error(f"LLM decision failed: {e}")
+            logger.error(f"Response received: {repr(full_response[:1000])}")
             # Fallback action
             return AgentAction(
                 reasoning="Error in LLM response, waiting",
@@ -524,7 +550,7 @@ class BrowserAgent:
         
         return result
     
-    async def execute_action(self, action: AgentAction, state: BrowserState) -> bool:
+    async def execute_action(self, action: AgentAction, _: BrowserState) -> bool:
         """Execute the decided action"""
         
         try:
